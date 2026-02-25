@@ -134,7 +134,7 @@ pre, code {
     // ────────────────────────────────────────────────  
     // تنظیمات اصلی  
     // ────────────────────────────────────────────────  
-    const API_URL = "https://openrouter.ai/api/v1/chat/completions";  
+    const API_URL = "/chat";  
     const API_KEYS = [  
       "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",  
       "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",  
@@ -280,10 +280,9 @@ async function streamResponse(messages) {
     const model = MODELS[modelIndex];
 
     try {
-      const res = await fetch(API_URL, {
+      const res = await fetch("/chat", {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${key}`,
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
