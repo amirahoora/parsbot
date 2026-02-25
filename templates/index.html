@@ -134,11 +134,11 @@ pre, code {
     // ────────────────────────────────────────────────  
     // تنظیمات اصلی  
     // ────────────────────────────────────────────────  
-    const API_URL = "/chat";  
+    const API_URL = "https://openrouter.ai/api/v1/chat/completions";  
     const API_KEYS = [  
-      "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",  
-      "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",  
-      "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"  
+      "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",  
+      "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",  
+      "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"  
     ];  
     const MODELS = ["stepfun/step-3.5-flash:free", "stepfun/step-3.5-flash:free"];  
   
@@ -280,9 +280,10 @@ async function streamResponse(messages) {
     const model = MODELS[modelIndex];
 
     try {
-      const res = await fetch("/chat", {
+      const res = await fetch(API_URL, {
         method: "POST",
         headers: {
+          "Authorization": `Bearer ${key}`,
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
@@ -489,6 +490,64 @@ function initialize() {
 
 let currentAudio = null;
 
+function createAudioPlayer(blob) {
+  const url = URL.createObjectURL(blob);
+
+  const playerContainer = document.createElement("div");
+  playerContainer.className = "flex items-center gap-2 mt-2";
+
+  const playBtn = document.createElement("button");
+  playBtn.innerHTML = '<i class="fa-solid fa-play"></i>';
+  playBtn.className = "text-white";
+
+  const seekBar = document.createElement("input");
+  seekBar.type = "range";
+  seekBar.min = 0;
+  seekBar.value = 0;
+  seekBar.step = 0.01;
+  seekBar.className = "flex-1";
+
+  const audio = new Audio(url);
+  audio.preload = "metadata";
+
+  let isPlaying = false;
+
+  playBtn.onclick = () => {
+    if (!isPlaying) {
+      audio.play();
+    } else {
+      audio.pause();
+    }
+  };
+
+  audio.onplay = () => {
+    isPlaying = true;
+    playBtn.innerHTML = '<i class="fa-solid fa-pause"></i>';
+  };
+
+  audio.onpause = () => {
+    isPlaying = false;
+    playBtn.innerHTML = '<i class="fa-solid fa-play"></i>';
+  };
+
+  audio.ontimeupdate = () => {
+    seekBar.value = audio.currentTime;
+  };
+
+  audio.onloadedmetadata = () => {
+    seekBar.max = audio.duration;
+  };
+
+  seekBar.oninput = () => {
+    audio.currentTime = seekBar.value;
+  };
+
+  playerContainer.appendChild(playBtn);
+  playerContainer.appendChild(seekBar);
+
+  return { container: playerContainer, audio };
+}
+	
 async function speakText(index) {
   const chat = getActiveChat();
   if (!chat) return;
@@ -496,31 +555,37 @@ async function speakText(index) {
   const text = chat.messages[index].content;
 
   try {
-    if (currentAudio) {
-      currentAudio.pause();
-      currentAudio = null;
-    }
-
     const response = await fetch("/tts", {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({ text })
+      body: JSON.stringify({ text: text })
     });
 
-    const blob = await response.blob();
-    const audioUrl = URL.createObjectURL(blob);
+    if (!response.ok) {
+      alert("خطا در تولید صدا");
+      return;
+    }
 
-    currentAudio = new Audio(audioUrl);
-    currentAudio.play();
+    const blob = await response.blob();
+
+    if (currentAudio) {
+      currentAudio.pause();
+    }
+
+    const { container, audio } = createAudioPlayer(blob);
+    currentAudio = audio;
+
+    const containerEl = document.getElementById("chat-container");
+    containerEl.appendChild(container);
+    containerEl.scrollTop = containerEl.scrollHeight;
 
   } catch (err) {
-    alert("خطا در تولید صدا");
     console.error(err);
+    alert("خطا در اتصال به سرور پایتون");
   }
 }
-
 // ────────────────────────────────────────────────
 // 🎤 Speech To Text
 // ────────────────────────────────────────────────
