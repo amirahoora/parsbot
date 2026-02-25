@@ -1,49 +1,55 @@
+import threading
+import asyncio
 import uuid
-import subprocess
-from flask import Flask, request, render_template, send_file, jsonify
+import webview
+from flask import Flask, request, send_file, render_template
+import edge_tts
 
-app = Flask(name)
+app = Flask(__name__)
 
 VOICE = "fa-IR-FaridNeural"
 
-# =========================
-# صفحه اصلی
-# =========================
+# ---------- تولید صدا ----------
+async def generate_voice(text, filename):
+    communicate = edge_tts.Communicate(text, VOICE)
+    await communicate.save(filename)
+
+def run_async(coro):
+    loop = asyncio.get_event_loop()
+    if loop.is_running():
+        return asyncio.run_coroutine_threadsafe(coro, loop).result()
+    else:
+        return loop.run_until_complete(coro)
 
 @app.route("/")
 def index():
     return render_template("index.html")
 
-# =========================
-# فقط TTS
-# =========================
-
 @app.route("/tts", methods=["POST"])
 def tts():
-    data = request.get_json()
+    data = request.json
     text = data.get("text", "")
 
     if not text:
-        return jsonify({"error": "متن خالی است"}), 400
+        return {"error": "متن خالی است"}, 400
 
-    filename = f"/tmp/voice_{uuid.uuid4().hex}.mp3"
-
-    try:
-        subprocess.run(
-            [
-                "edge-tts",
-                "--text", text,
-                "--voice", VOICE,
-                "--write-media", filename
-            ],
-            check=True
-        )
-    except Exception as e:
-        print("TTS Error:", e)
-        return jsonify({"error": "خطا در تولید صدا"}), 500
-
+    filename = f"voice_{uuid.uuid4().hex}.mp3"
+    run_async(generate_voice(text, filename))
     return send_file(filename, mimetype="audio/mpeg")
 
-# اجرای لوکال
-if name == "main":
-    app.run(host="0.0.0.0", port=5000)
+# ---------- اجرای Flask در بکگراند ----------
+def start_flask():
+    app.run(host="127.0.0.1", port=5001, debug=False, use_reloader=False)
+
+flask_thread = threading.Thread(target=start_flask)
+flask_thread.daemon = True
+flask_thread.start()
+
+webview.create_window(
+    "پارس بات",
+    "http://127.0.0.1:5001",
+    width=1200,
+    height=800
+)
+
+webview.start()
