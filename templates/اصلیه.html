@@ -1,0 +1,572 @@
+<!DOCTYPE html>  <html lang="fa" dir="rtl">  
+<head>  
+  <meta charset="UTF-8" />  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />  
+  <title>پارس بات</title>  
+  <script src="https://cdn.tailwindcss.com"></script>  
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />  
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>  
+  <style>  
+      @import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;700&display=swap');    
+    * {  
+  font-family: system-ui, -apple-system, BlinkMacSystemFont,  
+               "Segoe UI", Roboto, Helvetica, Arial, sans-serif;  
+}    
+    body { background: #000; color: #e5e7eb; overflow: auto; }  
+    .chat-area { scrollbar-width: thin; scrollbar-color: #4b5563 #111827; }  
+    .chat-area::-webkit-scrollbar { width: 5px; }  
+    .chat-area::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 10px; }  
+    .user-bubble { background: #2563eb; border-radius: 20px 20px 4px 20px; }  
+    .code-block { background: #111827; border: 1px solid #374151; border-radius: 10px; overflow-x: auto; padding: 1rem; font-family: 'Courier New', monospace; font-size: 0.95rem; }  
+    .input-blur { background: rgba(15,23,42,0.92); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.07); }  
+    .sidebar { transition: transform 0.4s cubic-bezier(0.32, 0.72, 0, 1); }  
+    .heading-line { height: 2px; background: linear-gradient(90deg, transparent, #d1d5db, transparent); }  
+    .thought-box { background: #171717; border: 1px solid #374151; border-radius: 12px; }  
+  /* ───────── Mobile First + No Horizontal Scroll ───────── */
+
+html, body {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden !important;
+  overscroll-behavior-x: none;
+}
+
+/* هیچ المانی اجازه شکستن عرض صفحه رو نداره */
+* {
+  box-sizing: border-box;
+  max-width: 100vw;
+}
+
+/* پیام‌ها (کاربر و بات) */
+.message-bubble {
+  width: 100%;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: normal;
+  direction: rtl;
+  text-align: right;
+}
+
+/* prose دردسرساز روی موبایل */
+.prose {
+  max-width: 100% !important;
+  overflow-x: hidden;
+}
+
+/* کد و pre هم حق اسکرول افقی ندارن */
+pre, code {
+  max-width: 100%;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* فکر کردن */
+.thought-box {
+  max-width: 100%;
+}
+
+</style>  
+
+</head>  
+<body class="h-screen flex flex-col">    <div class="flex-1 flex relative">  <!-- سایدبار مکالمات -->  
+<div id="sidebar" class="sidebar fixed inset-y-0 right-0 w-80 bg-zinc-950 border-l border-zinc-800 z-50 translate-x-full flex flex-col">  
+  <div class="p-5 border-b border-zinc-800 flex items-center justify-between">  
+    <div class="flex items-center gap-3">  
+      <div class="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-xl flex-center text-2xl font-bold">پ</div>  
+      <div>  
+        <div class="text-xl font-bold">پارس بات</div>  
+        <div class="text-xs text-zinc-500">ساخته اهورا معتمدی</div>  
+      </div>  
+    </div>  
+    <button onclick="toggleSidebar()" class="text-2xl text-zinc-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>  
+  </div>  
+
+  <div class="p-4">  
+    <button onclick="createNewChat()" class="w-full bg-zinc-800 hover:bg-zinc-700 py-3 rounded-2xl flex-center gap-2 text-sm">  
+      <i class="fa-solid fa-plus"></i> مکالمه جدید  
+    </button>  
+  </div>  
+
+  <div id="history-list" class="flex-1 overflow-y-auto px-3 space-y-1.5"></div>  
+
+  <div class="p-5 border-t border-zinc-800 text-xs text-zinc-500 flex-center gap-2">  
+    <i class="fa-solid fa-robot"></i> نسخه ۲.۱ • همیشه آماده  
+  </div>  
+</div>  
+
+<!-- overlay تاریک -->  
+<div id="overlay" class="fixed inset-0 bg-black/70 hidden z-40" onclick="toggleSidebar()"></div>  
+
+<!-- محتوای اصلی -->  
+<div class="flex-1 flex flex-col">  
+  <!-- هدر -->  
+  <header class="h-16 bg-zinc-950 border-b border-zinc-800 flex items-center px-5 justify-between">  
+    <button onclick="toggleSidebar()" class="text-2xl text-zinc-300 hover:text-white"><i class="fa-solid fa-bars"></i></button>  
+    <div id="current-title" class="text-lg font-semibold">پارس بات</div>  
+    <button onclick="deleteCurrentChat()" class="text-zinc-400 hover:text-red-400"><i class="fa-solid fa-trash-can"></i></button>  
+  </header>  
+
+  <!-- منطقه چت -->  
+  <main id="chat-container" class="flex-1 overflow-y-auto chat-area p-5 space-y-8 bg-zinc-950"></main>  
+
+  <!-- ورودی پیام -->  
+  <footer class="px-5 pb-6 pt-3">  
+    <div class="input-blur rounded-3xl shadow-2xl max-w-4xl mx-auto">  
+      <div class="flex items-end gap-3 px-5 py-3.5">  
+        <textarea id="message-input" rows="1" placeholder="پیام خود را بنویسید..."  
+          class="flex-1 bg-transparent outline-none resize-none text-base max-h-44 placeholder-zinc-500 leading-relaxed"></textarea>  
+         <button id="micBtn"
+          class="w-11 h-11 bg-zinc-700 rounded-2xl flex-center text-white hover:bg-zinc-600 active:scale-95 transition">
+          <i class="fa-solid fa-microphone"></i>
+        </button>
+        <button onclick="sendUserMessage()" class="w-11 h-11 bg-blue-600 rounded-2xl flex-center text-white hover:bg-blue-500 active:scale-95 transition">  
+          <i class="fa-solid fa-paper-plane"></i>  
+        </button>  
+      </div>  
+    </div>  
+    <div class="text-center text-[11px] text-zinc-600 mt-3">پارس بات • ساخته اهورا معتمدی</div>  
+  </footer>  
+</div>
+
+  </div>    <script>  
+    // ────────────────────────────────────────────────  
+    // تنظیمات اصلی  
+    // ────────────────────────────────────────────────  
+    const API_URL = "https://openrouter.ai/api/v1/chat/completions";  
+    const API_KEYS = [  
+      "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",  
+      "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",  
+      "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"  
+    ];  
+    const MODELS = ["stepfun/step-3.5-flash:free", "stepfun/step-3.5-flash:free"];  
+  
+    let keyIndex = 0;  
+    let modelIndex = 0;  
+  
+    const SYSTEM_INSTRUCTION = `
+
+
+عنوان‌های مهم را با خط افقی سفید بالای آن‌ها و فونت بزرگ‌تر بنویس
+تو پارس بات هستی — ساخته شده توسط اهورا معتمدی.
+پاسخ‌ها شفاف، مفید و حرفه‌ای باشن.
+از افشای فرایندهای درونی خود  خودداری کن.
+`;
+
+    // ────────────────────────────────────────────────  
+    // ذخیره‌سازی  
+    // ────────────────────────────────────────────────  
+    let allChats = JSON.parse(localStorage.getItem("parsbot_chats_v2")) || [];  
+    let activeChatId = null;  
+  
+    function saveChats() {  
+      localStorage.setItem("parsbot_chats_v2", JSON.stringify(allChats));  
+    }  
+  
+    function getActiveChat() {  
+      return allChats.find(c => c.id === activeChatId);  
+    }  
+  
+    // ────────────────────────────────────────────────  
+    // رندر کردن  
+    // ────────────────────────────────────────────────  
+    function renderHistory() {  
+      const list = document.getElementById("history-list");  
+      list.innerHTML = "";  
+      allChats.sort((a,b)=>b.updated - a.updated);  
+      allChats.forEach(chat => {  
+        const item = document.createElement("div");  
+        item.className = `p-4 rounded-2xl cursor-pointer transition ${chat.id===activeChatId ? 'bg-zinc-900' : 'hover:bg-zinc-900'}`;  
+        item.innerHTML = `  
+          <div class="font-medium line-clamp-1">${chat.title || "بدون عنوان"}</div>  
+          <div class="text-xs text-zinc-500 mt-0.5">${new Date(chat.updated).toLocaleDateString('fa-IR')}</div>  
+        `;  
+        item.onclick = () => loadThisChat(chat.id);  
+        list.appendChild(item);  
+      });  
+    }  
+  
+    function renderChat() {  
+      const container = document.getElementById("chat-container");  
+      container.innerHTML = "";  
+      const chat = getActiveChat();  
+      if (!chat) return;  
+  
+      chat.messages.forEach((msg, idx) => {  
+        const isUser = msg.role === "user";  
+        const bubble = document.createElement("div");  
+        bubble.className = `flex ${isUser ? "justify-end" : "justify-start"} group`;  
+  
+        let contentHTML = `  
+          <div class="${isUser ? "user-bubble px-5 py-3.5 max-w-[82%]" : "max-w-[90%]"} text-[15.5px] leading-relaxed">  
+            <div class="prose prose-invert prose-zinc max-w-none">  
+              ${parseMarkdown(msg.content)}  
+            </div>  
+        `;  
+  
+        if (isUser) {  
+          contentHTML += `  
+            <div class="opacity-0 group-hover:opacity-100 transition mt-2 text-right">  
+              <button onclick="editUserMessage(${idx})" class="text-blue-300 hover:text-blue-200 text-lg px-2">  
+                <i class="fa-solid fa-pencil"></i>  
+              </button>  
+            </div>`;  
+        } else {  
+          contentHTML += `  
+            <div class="flex gap-5 mt-4 text-zinc-400 text-sm opacity-80">  
+              <button onclick="regenerateFrom(${idx})" class="flex items-center gap-1.5 hover:text-white">  
+                <i class="fa-solid fa-rotate-right"></i> دوباره فکر کن  
+              </button>  
+              <button onclick="copyText('${escapeHtml(msg.content)}')" class="flex items-center gap-1.5 hover:text-white">  
+                <i class="fa-solid fa-copy"></i> کپی  
+              </button>  
+          <button onclick="speakText(${idx})" 
+                      class="flex items-center gap-1.5 hover:text-green-400">
+                      <i class="fa-solid fa-volume-high"></i> پخش صدا
+             </button>
+            </div>`;  
+        }  
+  
+        contentHTML += "</div>";  
+        bubble.innerHTML = contentHTML;  
+        container.appendChild(bubble);  
+      });  
+  
+      container.scrollTop = container.scrollHeight;  
+      MathJax.typesetPromise();  
+    }  
+  
+    function parseMarkdown(txt) {  
+      return txt  
+        .replace(/^### (.*)$/gm, `<div class="heading-line my-5"></div><h3 class="text-2xl font-bold mt-7 mb-3">$1</h3>`)  
+        .replace(/^## (.*)$/gm,  `<div class="heading-line my-6"></div><h2 class="text-3xl font-bold mt-9 mb-4">$1</h2>`)  
+        .replace(/^# (.*)$/gm,   `<div class="heading-line my-7"></div><h1 class="text-4xl font-bold mt-10 mb-5">$1</h1>`)  
+        .replace(/\*\*(.+?)\*\*/g, '<strong class="font-semibold">$1</strong>')  
+        .replace(/```([\s\S]*?)```/g, `<pre class="code-block my-5"><code>$1</code></pre>`)  .replace(/`([^`]+)`/g, '<code class="bg-zinc-900 px-1.5 py-0.5 rounded text-blue-300">$1</code>')  
+    .replace(/^\s*[-•*]\s+(.*)$/gm, '<div class="flex gap-3 my-1"><span class="text-blue-400">•</span>$1</div>');  
+}  
+
+function escapeHtml(unsafe) {  
+  return unsafe.replace(/[&<"']/g, m => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[m]));  
+}  
+
+// ────────────────────────────────────────────────  
+// ارتباط با API + استریم + فکر کردن  
+// ────────────────────────────────────────────────  
+async function streamResponse(messages) {
+  const chat = getActiveChat();
+  if (!chat) return;
+
+  // ───────── کادر فکر کردن ─────────
+  const thinkingDiv = document.createElement("div");
+  thinkingDiv.id = "thinking-stream";
+  thinkingDiv.className = "flex justify-start mb-2";
+  thinkingDiv.innerHTML = `
+    <div class="thought-box px-5 py-3.5 max-w-[90%] text-zinc-300 text-sm">
+      <div class="font-medium text-zinc-100 mb-2">در حال فکر کردن…</div>
+      <div id="thought-content" class="whitespace-pre-wrap opacity-90"></div>
+    </div>
+  `;
+  const container = document.getElementById("chat-container");
+  container.appendChild(thinkingDiv);
+  container.scrollTop = container.scrollHeight;
+
+  let thinkingText = ""; // فقط برای نمایش فکر
+  let finalText = "";    // پاسخ نهایی مدل (نمایش داده نمی‌شود تا آخر)
+
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const key = API_KEYS[keyIndex];
+    const model = MODELS[modelIndex];
+
+    try {
+      const res = await fetch(API_URL, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${key}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model,
+          messages: [{ role: "system", content: SYSTEM_INSTRUCTION }, ...messages],
+          stream: true,
+          max_tokens: 1800,
+          temperature: 0.82
+        })
+      });
+
+      if (!res.ok) {
+        if (res.status === 429) {
+          keyIndex = (keyIndex + 1) % API_KEYS.length;
+          modelIndex = (modelIndex + 1) % MODELS.length;
+          continue;
+        }
+        throw new Error("HTTP " + res.status);
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split("\n");
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+
+          const data = line.slice(6).trim();
+          if (data === "[DONE]") {
+            // ─── پایان: حذف فکر و نمایش پاسخ نهایی ───
+            thinkingDiv.remove();
+
+            if (finalText.trim()) {
+              chat.messages.push({
+                role: "assistant",
+                content: finalText
+              });
+              chat.updated = Date.now();
+              saveChats();
+              renderChat();
+              renderHistory();
+            }
+            return;
+          }
+
+          try {
+            const parsed = JSON.parse(data);
+            const delta = parsed.choices?.[0]?.delta?.content;
+            if (delta) {
+              thinkingText += delta;
+              finalText += delta;
+
+              const thoughtEl = document.getElementById("thought-content");
+              if (thoughtEl) thoughtEl.textContent = thinkingText;
+
+              container.scrollTop = container.scrollHeight;
+            }
+          } catch {}
+        }
+      }
+    } catch (err) {
+      console.warn(err);
+      keyIndex = (keyIndex + 1) % API_KEYS.length;
+    }
+  }
+
+  // اگر خطا خورد
+  thinkingDiv.remove();
+}
+// ────────────────────────────────────────────────  
+// اقدامات کاربر  
+// ────────────────────────────────────────────────  
+async function sendUserMessage() {  
+  const input = document.getElementById("message-input");  
+  const text = input.value.trim();  
+  if (!text) return;  
+
+  let chat = getActiveChat();  
+  if (!chat) {  
+    createNewChat();  
+    chat = getActiveChat();  
+  }  
+
+  chat.messages.push({ role: "user", content: text });  
+  if (!chat.title) {  
+    chat.title = text.length > 60 ? text.slice(0,57) + "…" : text;  
+    document.getElementById("current-title").textContent = chat.title;  
+  }  
+  chat.updated = Date.now();  
+
+  input.value = "";  
+  renderChat();  
+  renderHistory();  
+  saveChats();  
+
+  await streamResponse(chat.messages);  
+}  
+
+function editUserMessage(idx) {  
+  const chat = getActiveChat();  
+  if (!chat) return;  
+  const msg = chat.messages[idx];  
+  document.getElementById("message-input").value = msg.content;  
+  chat.messages.splice(idx, 1);  
+  renderChat();  
+}  
+
+async function regenerateFrom(idx) {  
+  const chat = getActiveChat();  
+  if (!chat) return;  
+  chat.messages = chat.messages.slice(0, idx);  
+  renderChat();  
+  await streamResponse(chat.messages);  
+}  
+
+function copyText(text) {  
+  navigator.clipboard.writeText(text).then(() => {  
+    const toast = document.createElement("div");  
+    toast.className = "fixed bottom-28 left-1/2 -translate-x-1/2 bg-zinc-800 text-white px-6 py-3 rounded-2xl shadow-xl text-sm z-50";  
+    toast.textContent = "کپی شد ✓";  
+    document.body.appendChild(toast);  
+    setTimeout(() => toast.remove(), 1800);  
+  });  
+}  
+
+function createNewChat() {  
+  const newChat = {  
+    id: Date.now(),  
+    title: null,  
+    messages: [],  
+    created: Date.now(),  
+    updated: Date.now()  
+  };  
+  allChats.push(newChat);  
+  activeChatId = newChat.id;  
+  saveChats();  
+  document.getElementById("current-title").textContent = "پارس بات";  
+  renderChat();  
+  renderHistory();  
+}  
+
+function loadThisChat(id) {  
+  activeChatId = id;  
+  const chat = getActiveChat();  
+  document.getElementById("current-title").textContent = chat?.title || "پارس بات";  
+  renderChat();  
+  renderHistory();  
+  toggleSidebar();  
+}  
+
+function deleteCurrentChat() {  
+  if (!activeChatId || !confirm("مکالمه پاک شود؟")) return;  
+  allChats = allChats.filter(c => c.id !== activeChatId);  
+  activeChatId = null;  
+  saveChats();  
+  createNewChat();  
+}  
+
+function toggleSidebar() {  
+  document.getElementById("sidebar").classList.toggle("translate-x-full");  
+  document.getElementById("overlay").classList.toggle("hidden");  
+}  
+
+// ────────────────────────────────────────────────  
+// شروع برنامه  
+// ────────────────────────────────────────────────  
+function initialize() {  
+  if (allChats.length === 0) createNewChat();  
+  else activeChatId = allChats[allChats.length-1].id;  
+
+  const chat = getActiveChat();  
+  if (chat.messages.length === 0) {  
+    chat.messages.push({  
+      role: "assistant",  
+      content: "سلام! من پارس بات هستم، ساخته اهورا معتمدی.\nهر سوالی داری بپرس، آماده‌ام!"  
+    });  
+    saveChats();  
+  }  
+
+  renderHistory();  
+  renderChat();  
+
+  // خودکار بزرگ شدن textarea  
+  const ta = document.getElementById("message-input");  
+  ta.addEventListener("input", () => {  
+    ta.style.height = "auto";  
+    ta.style.height = Math.min(ta.scrollHeight, 160) + "px";  
+  });  
+
+  // ارسال با Enter  
+  ta.addEventListener("keydown", e => {  
+    if (e.key === "Enter" && !e.shiftKey) {  
+      e.preventDefault();  
+      sendUserMessage();  
+    }  
+  });  
+}  
+
+let currentAudio = null;
+
+async function speakText(index) {
+  const chat = getActiveChat();
+  if (!chat) return;
+
+  const text = chat.messages[index].content;
+
+  try {
+    if (currentAudio) {
+      currentAudio.pause();
+      currentAudio = null;
+    }
+
+    const response = await fetch("/tts", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ text })
+    });
+
+    const blob = await response.blob();
+    const audioUrl = URL.createObjectURL(blob);
+
+    currentAudio = new Audio(audioUrl);
+    currentAudio.play();
+
+  } catch (err) {
+    alert("خطا در تولید صدا");
+    console.error(err);
+  }
+}
+
+// ────────────────────────────────────────────────
+// 🎤 Speech To Text
+// ────────────────────────────────────────────────
+
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+if (SpeechRecognition) {
+
+  const recognition = new SpeechRecognition();
+  recognition.lang = "fa-IR"; // اگر خواستی انگلیسی: en-US
+  recognition.interimResults = false;
+  recognition.continuous = false;
+
+  const micBtn = document.getElementById("micBtn");
+  const textarea = document.getElementById("message-input");
+
+  micBtn.addEventListener("click", () => {
+    micBtn.classList.add("bg-red-600");
+    recognition.start();
+  });
+
+  recognition.onresult = (event) => {
+    const transcript = event.results[0][0].transcript;
+    textarea.value = transcript;
+
+    // auto resize
+    textarea.style.height = "auto";
+    textarea.style.height = Math.min(textarea.scrollHeight, 160) + "px";
+  };
+
+  recognition.onend = () => {
+    micBtn.classList.remove("bg-red-600");
+  };
+
+  recognition.onerror = () => {
+    micBtn.classList.remove("bg-red-600");
+    alert("میکروفون در دسترس نیست");
+  };
+
+} else {
+  console.log("Speech Recognition پشتیبانی نمی‌شود");
+}
+
+window.onload = initialize;
+
+  </script>  
+</body>  
+</html>  
